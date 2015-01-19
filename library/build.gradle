@@ -1,4 +1,5 @@
 apply plugin: 'android-library'
+apply plugin: 'maven-publish'
 
 android {
     compileSdkVersion 19
@@ -12,5 +13,15 @@ android {
         }
     }
 }
+
+android.libraryVariants
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifact bundleRelease
+        }
+    }
+}
+
 
 apply from: 'https://raw.github.com/shamanland/gradle-mvn-push/cc18d56549cdea03f744b6fff27911569394073e/gradle-mvn-push.gradle'

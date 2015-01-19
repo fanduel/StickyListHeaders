@@ -353,12 +353,21 @@ public class StickyListHeadersListView extends FrameLayout {
         // Skip looking at the first view. it never matters because it always
         // results in a headerOffset = 0
         int headerBottom = mHeader.getMeasuredHeight() + stickyHeaderTop();
-        for (int i = 0; i < mList.getChildCount(); i++) {
+        final int childCount = mList.getChildCount();
+        for (int i = 0; i < childCount; i++) {
             final View child = mList.getChildAt(i);
-            final boolean doesChildHaveHeader = child instanceof WrapperView && ((WrapperView) child).hasHeader();
+            final View nextChild =  i+1 < childCount ? mList.getChildAt(i+1) : null;
+            final boolean doesNextChildHaveHeader = nextChild instanceof WrapperView && ((WrapperView) nextChild).hasHeader();
             final boolean isChildFooter = mList.containsFooterView(child);
-            if (child.getTop() >= stickyHeaderTop() && (doesChildHaveHeader || isChildFooter)) {
+            if (child.getTop() >= stickyHeaderTop() && (doesNextChildHaveHeader || isChildFooter)) {
                 headerOffset = Math.min(child.getTop() - headerBottom, 0);
+                break;
+            }
+            final boolean doesThisChildHaveHeader = child instanceof WrapperView && ((WrapperView) child).hasHeader();
+            if (child.getTop() >= stickyHeaderTop() && (doesThisChildHaveHeader || isChildFooter)) {
+                if (i > 0) {
+                    headerOffset = Math.min(mList.getChildAt(i - 1).getTop() - headerBottom, 0);
+                }
                 break;
             }
         }
@@ -747,7 +756,7 @@ public class StickyListHeadersListView extends FrameLayout {
     public int getHeaderViewsCount() {
         return mList.getHeaderViewsCount();
     }
-    
+
     public void addFooterView(View v, Object data, boolean isSelectable) {
         mList.addFooterView(v, data, isSelectable);
     }
