@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
 import android.util.SparseBooleanArray;
 import android.view.MotionEvent;
 import android.view.View;
@@ -24,21 +25,33 @@ import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.SectionIndexer;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import se.emilsjolander.stickylistheaders.WrapperViewList.LifeCycleListener;
 
 /**
  * Even though this is a FrameLayout subclass we still consider it a ListView.
  * This is because of 2 reasons:
- *   1. It acts like as ListView.
- *   2. It used to be a ListView subclass and refactoring the name would cause compatibility errors.
+ * 1. It acts like as ListView.
+ * 2. It used to be a ListView subclass and refactoring the name would cause compatibility errors.
  *
  * @author Emil Sjölander
  */
 public class StickyListHeadersListView extends FrameLayout {
+    private static final int ATTR_STICK_TO_BOTTOM = 0;
+    private static final int ATTR_STICK_TO_TOP = 1;
+
+    private static SparseArray<StickToStrategy> stickToStrategies = new SparseArray<StickToStrategy>();
+
+    static {
+        stickToStrategies.put(ATTR_STICK_TO_BOTTOM, new StickToBottomOfLastElement());
+        stickToStrategies.put(ATTR_STICK_TO_TOP, new StickToTopOfLastElement());
+    }
 
     public interface OnHeaderClickListener {
         void onHeaderClick(StickyListHeadersListView l, View header,
-                                  int itemPosition, long headerId, boolean currentlySticky);
+                           int itemPosition, long headerId, boolean currentlySticky);
     }
 
     /**
@@ -62,14 +75,14 @@ public class StickyListHeadersListView extends FrameLayout {
      */
     public interface OnStickyHeaderChangedListener {
         /**
-         * @param l             The view parent
-         * @param header        The new sticky header view.
-         * @param itemPosition  The position of the item within the adapter's data set of
-         *                      the item whose header is now sticky.
-         * @param headerId      The id of the new sticky header.
+         * @param l            The view parent
+         * @param header       The new sticky header view.
+         * @param itemPosition The position of the item within the adapter's data set of
+         *                     the item whose header is now sticky.
+         * @param headerId     The id of the new sticky header.
          */
         void onStickyHeaderChanged(StickyListHeadersListView l, View header,
-                                          int itemPosition, long headerId);
+                                   int itemPosition, long headerId);
 
     }
 
@@ -104,6 +117,7 @@ public class StickyListHeadersListView extends FrameLayout {
     private AdapterWrapperDataSetObserver mDataSetObserver;
     private Drawable mDivider;
     private int mDividerHeight;
+    private int mStickTo;
 
     public StickyListHeadersListView(Context context) {
         this(context, null);
@@ -127,7 +141,7 @@ public class StickyListHeadersListView extends FrameLayout {
         mList.setDividerHeight(0);
 
         if (attrs != null) {
-            TypedArray a = context.getTheme().obtainStyledAttributes(attrs,R.styleable.StickyListHeadersListView, 0, 0);
+            TypedArray a = context.getTheme().obtainStyledAttributes(attrs, R.styleable.StickyListHeadersListView, 0, 0);
 
             try {
                 // -- View attributes --
@@ -208,6 +222,8 @@ public class StickyListHeadersListView extends FrameLayout {
                 mIsDrawingListUnderStickyHeader = a.getBoolean(
                         R.styleable.StickyListHeadersListView_isDrawingListUnderStickyHeader,
                         true);
+
+                mStickTo = a.getInteger(R.styleable.StickyListHeadersListView_stickTo, ATTR_STICK_TO_BOTTOM);
             } finally {
                 a.recycle();
             }
@@ -337,7 +353,7 @@ public class StickyListHeadersListView extends FrameLayout {
                 }
                 ensureHeaderHasCorrectLayoutParams(mHeader);
                 measureHeader(mHeader);
-                if(mOnStickyHeaderChangedListener != null) {
+                if (mOnStickyHeaderChangedListener != null) {
                     mOnStickyHeaderChangedListener.onStickyHeaderChanged(this, mHeader, headerPosition, mHeaderId);
                 }
                 // Reset mHeaderOffset to null ensuring
@@ -347,25 +363,7 @@ public class StickyListHeadersListView extends FrameLayout {
             }
         }
 
-        int headerOffset = 0;
-
-        // Calculate new header offset
-        // Skip looking at the first view. it never matters because it always
-        // results in a headerOffset = 0
-        int headerBottom = mHeader.getMeasuredHeight() + stickyHeaderTop();
-        final int childCount = mList.getChildCount();
-        for (int i = 0; i < childCount; i++) {
-            final View child = mList.getChildAt(i);
-            final View nextChild = i+1 < childCount ? mList.getChildAt(i+1) : null;
-            final boolean doesNextChildHaveHeader = nextChild instanceof WrapperView && ((WrapperView) nextChild).hasHeader();
-            final boolean isChildFooter = mList.containsFooterView(child);
-            if (child.getBottom() >= 0 && (doesNextChildHaveHeader || isChildFooter)) {
-                headerOffset = Math.min(child.getTop() - headerBottom, 0);
-                break;
-            }
-        }
-
-        setHeaderOffet(headerOffset);
+        setHeaderOffet(stickToStrategies.get(mStickTo).calculateHeaderOffset(this));
 
         if (!mIsDrawingListUnderStickyHeader) {
             mList.setTopClippingLength(mHeader.getMeasuredHeight()
@@ -570,9 +568,7 @@ public class StickyListHeadersListView extends FrameLayout {
     }
 
     /**
-     *
-     * @param stickyHeaderTopOffset
-     *          The offset of the sticky header fom the top of the view
+     * @param stickyHeaderTopOffset The offset of the sticky header fom the top of the view
      */
     public void setStickyHeaderTopOffset(int stickyHeaderTopOffset) {
         mStickyHeaderTopOffset = stickyHeaderTopOffset;
@@ -644,7 +640,7 @@ public class StickyListHeadersListView extends FrameLayout {
 
     private boolean requireSdkVersion(int versionCode) {
         if (Build.VERSION.SDK_INT < versionCode) {
-            Log.e("StickyListHeaders", "Api lvl must be at least "+versionCode+" to call this method");
+            Log.e("StickyListHeaders", "Api lvl must be at least " + versionCode + " to call this method");
             return false;
         }
         return true;
@@ -1054,7 +1050,7 @@ public class StickyListHeadersListView extends FrameLayout {
     public Parcelable onSaveInstanceState() {
         Parcelable superState = super.onSaveInstanceState();
         if (superState != BaseSavedState.EMPTY_STATE) {
-          throw new IllegalStateException("Handling non empty state of parent class is not implemented");
+            throw new IllegalStateException("Handling non empty state of parent class is not implemented");
         }
         return mList.onSaveInstanceState();
     }
@@ -1071,7 +1067,7 @@ public class StickyListHeadersListView extends FrameLayout {
         return mList.canScrollVertically(direction);
     }
 
-    public void setTranscriptMode (int mode) {
+    public void setTranscriptMode(int mode) {
         mList.setTranscriptMode(mode);
     }
 
@@ -1079,4 +1075,55 @@ public class StickyListHeadersListView extends FrameLayout {
         mList.setBlockLayoutChildren(blockLayoutChildren);
     }
 
+    private interface StickToStrategy {
+        int calculateHeaderOffset(StickyListHeadersListView view);
+    }
+
+    private static class StickToTopOfLastElement implements StickToStrategy {
+        @Override
+        public int calculateHeaderOffset(StickyListHeadersListView view) {
+            int headerOffset = 0;
+
+            // Calculate new header offset
+            // Skip looking at the first view. it never matters because it always
+            // results in a headerOffset = 0
+            int headerBottom = view.mHeader.getMeasuredHeight() + view.stickyHeaderTop();
+            final int childCount = view.mList.getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                final View child = view.mList.getChildAt(i);
+                final View nextChild = i + 1 < childCount ? view.mList.getChildAt(i + 1) : null;
+                final boolean doesNextChildHaveHeader = nextChild instanceof WrapperView && ((WrapperView) nextChild).hasHeader();
+                final boolean isChildFooter = view.mList.containsFooterView(child);
+                if (child.getBottom() >= 0 && (doesNextChildHaveHeader || isChildFooter)) {
+                    headerOffset = Math.min(child.getTop() - headerBottom, 0);
+                    break;
+                }
+            }
+
+            return headerOffset;
+        }
+    }
+
+    private static class StickToBottomOfLastElement implements StickToStrategy {
+        @Override
+        public int calculateHeaderOffset(StickyListHeadersListView view) {
+            int headerOffset = 0;
+
+            // Calculate new header offset
+            // Skip looking at the first view. it never matters because it always
+            // results in a headerOffset = 0
+            int headerBottom = view.mHeader.getMeasuredHeight() + view.stickyHeaderTop();
+            for (int i = 0; i < view.mList.getChildCount(); i++) {
+                final View child = view.mList.getChildAt(i);
+                final boolean doesChildHaveHeader = child instanceof WrapperView && ((WrapperView) child).hasHeader();
+                final boolean isChildFooter = view.mList.containsFooterView(child);
+                if (child.getTop() >= view.stickyHeaderTop() && (doesChildHaveHeader || isChildFooter)) {
+                    headerOffset = Math.min(child.getTop() - headerBottom, 0);
+                    break;
+                }
+            }
+
+            return headerOffset;
+        }
+    }
 }
