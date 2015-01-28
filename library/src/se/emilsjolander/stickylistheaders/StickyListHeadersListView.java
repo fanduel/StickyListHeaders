@@ -612,6 +612,10 @@ public class StickyListHeadersListView extends FrameLayout {
         }
     }
 
+    public void setRecyclerListener(AbsListView.RecyclerListener listener) {
+        mList.setRecyclerListener(listener);
+    }
+
     public void setOnStickyHeaderOffsetChangedListener(OnStickyHeaderOffsetChangedListener listener) {
         mOnStickyHeaderOffsetChangedListener = listener;
     }
