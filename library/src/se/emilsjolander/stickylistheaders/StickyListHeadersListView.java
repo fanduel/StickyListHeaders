@@ -388,8 +388,8 @@ public class StickyListHeadersListView extends FrameLayout {
                             mHeaderPosition, mHeaderId, true);
                 }
             });
+            mHeader.setClickable(true);
         }
-        mHeader.setClickable(true);
     }
 
     // hides the headers in the list under the sticky header.
