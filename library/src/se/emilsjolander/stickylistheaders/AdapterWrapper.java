@@ -130,6 +130,7 @@ class AdapterWrapper extends BaseAdapter implements StickyListHeadersAdapter {
 			throw new NullPointerException("Header view must not be null.");
 		}
 		//if the header isn't clickable, the listselector will be drawn on top of the header
+		header.setVisibility(View.VISIBLE);
 		header.setClickable(true);
 		header.setOnClickListener(new OnClickListener() {
 
