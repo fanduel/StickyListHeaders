@@ -33,6 +33,10 @@
         <!-- StickyListHeaders attributes -->
         <attr name="hasStickyHeaders" format="boolean" />
         <attr name="isDrawingListUnderStickyHeader" format="boolean" />
+        <attr name="stickTo" format="enum">
+            <enum name="bottom_of_last_item" value="0" />
+            <enum name="top_of_last_item" value="1" />
+        </attr>
     </declare-styleable>
 
 </resources>
